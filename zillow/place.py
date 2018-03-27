@@ -1,6 +1,4 @@
 from abc import abstractmethod
-import warnings
-
 
 class SourceData(classmethod):
 
@@ -14,7 +12,7 @@ class SourceData(classmethod):
     @abstractmethod
     def debug(self):
         for i in self.__dict__.keys():
-            print ("%s: %s" % (i, self.__dict__[i]))
+            print("{}: {}".format(i, self.__dict__[I]))
 
     @abstractmethod
     def get_dict(self):
@@ -107,6 +105,39 @@ class ZEstimateData(SourceData):
         except:
             self.valuation_range_high = None
 
+class RentZestimateData(SourceData):
+    def __init__(self, **kwargs):
+        self.amount = None
+        self.amount_currency = None
+        self.amount_last_updated = None
+        self.amount_change_30days = None
+        self.valuation_range_low = None
+        self.valuation_range_high = None
+
+    def set_data(self, source_data):
+        """
+        :source_data: Data from data.get('SearchResults:searchresults', None)['response']['results']['result']['rentzestimate']
+        :return:
+        """
+        try:
+            self.amount = int(source_data['amount']['#text'])
+        except:
+            self.amount = None
+        self.amount_currency = source_data['amount']['@currency']
+        self.amount_last_updated = source_data['last-updated']
+        try:
+            self.amount_change_30days = int(source_data['valueChange']['#text'])
+        except:
+            self.amount_change_30days = None
+        try:
+            self.valuation_range_low = int(source_data['valuationRange']['low']['#text'])
+        except:
+            self.valuation_range_low = None
+        try:
+            self.valuation_range_high = int(source_data['valuationRange']['high']['#text'])
+        except:
+            self.valuation_range_high = None
+
 class LocalRealEstate(SourceData):
     def __init__(self):
         self.region_name = None
@@ -122,13 +153,14 @@ class LocalRealEstate(SourceData):
         :source_data": Data from data.get('SearchResults:searchresults', None)['response']['results']['result']['localRealEstate']
         :return:
         """
-        self.region_name = source_data['region']['@name']
-        self.region_id = source_data['region']['@id']
-        self.region_type =  source_data['region']['@type']
-        self.zillow_home_value_index = source_data.get('zindexValue', None)
-        self.overview_link =  source_data['region']['links']['overview']
-        self.fsbo_link =  source_data['region']['links']['forSaleByOwner']
-        self.sale_link =  source_data['region']['links']['forSale']
+        if source_data != None:
+            self.region_name = source_data['region']['@name']
+            self.region_id = source_data['region']['@id']
+            self.region_type =  source_data['region']['@type']
+            self.zillow_home_value_index = source_data.get('zindexValue', None)
+            self.overview_link =  source_data['region']['links']['overview']
+            self.fsbo_link =  source_data['region']['links']['forSaleByOwner']
+            self.sale_link =  source_data['region']['links']['forSale']
 
 class ExtendedData(SourceData):
     def __init__(self):
@@ -171,21 +203,11 @@ class Place(SourceData):
         self.links = Links()
         self.full_address = FullAddress()
         self.zestimate = ZEstimateData()
+        self.rent_zestimate = RentZestimateData()
         self.local_realestate = LocalRealEstate()
         self.similarity_score = None
         self.extended_data = ExtendedData()
         self.has_extended_data = has_extended_data
-
-    @property
-    def zestiamte(self):
-        """Backward-compatible typo property to prevent breaking changes."""
-        warnings.warn(
-            'The ``zestiamte`` attribute has been renamed to '
-            '``zestimate`` and will be removed in a future release.',
-            DeprecationWarning,
-        )
-        return self.zestimate
-
 
     def set_data(self, source_data):
         """
@@ -193,12 +215,17 @@ class Place(SourceData):
         :param source_data:
         :return:
         """
-
+        if type(source_data) == list:
+            source_data = source_data[0]
         self.zpid = source_data.get('zpid', None)
         self.similarity_score = source_data.get('@score', None)
         self.links.set_data(source_data['links'])
         self.full_address.set_data(source_data['address'])
         self.zestimate.set_data(source_data['zestimate'])
+        try:
+            self.rent_zestimate.set_data(source_data['rentzestimate'])
+        except:
+            print("From Zillow API--NO Rent Zestimate.")
         self.local_realestate.set_data(source_data['localRealEstate'])
         if self.has_extended_data:
             self.extended_data.set_data(source_data)
@@ -210,6 +237,7 @@ class Place(SourceData):
             'links': self.links.get_dict(),
             'full_address': self.full_address.get_dict(),
             'zestimate': self.zestimate.get_dict(),
+            'rent_zestimate': self.rent_zestimate.get_dict(),
             'local_realestate': self.local_realestate.get_dict(),
             'extended_data': self.extended_data.get_dict()
         }
